@@ -16,34 +16,85 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import logging
+import os
+import typing
+
+import git
+import yaml
+
 from kebechet.managers.manager import ManagerBase
 from kebechet.utils import cloned_repo
 
 _LOGGER = logging.getLogger(__name__)
 
+_KEBECHET_CONFIG_FILE_NAME  = "kebechet.yml"
+_GIT_TOKEN_VARIABLE = "${GIT_SECRET_TOKEN}"
+_GIT_BRANCH_NAME = "kebechet-initialization"
+_GIT_COMMIT_MESSAGE = "Creating kebechet YAML file"
+_GIT_MR_LABELS = ["enhancement"]
+_GIT_MR_BODY = """" 
+                Creates a YAML file with kebechet settings following this struct:
+                
+               """
+
+
+def create_config_file(service_type, slug: str):
+    if slug == "":
+        _LOGGER.error("Initialization failed due to an error extracting repository slug")
+        return
+
+    config = {
+        "repositories": [{
+            "slug": slug,
+            "token": _GIT_TOKEN_VARIABLE,
+            "service_type": service_type,
+            "managers": []
+        }]
+    }
+
+    with open("kebechet.yml", "w") as config_file:
+        config_file.write(yaml.dump(config, sort_keys=False))
+
 
 class InitManager(ManagerBase):
     """Manager for initializing Kebechet configs"""
 
-    def run(self) -> None:
+    def run(self, repo_path: str = None, token: str = None, service_type: str = None, slug: str = None)\
+            -> typing.Optional[dict]:
+
+        for file_name in os.listdir(repo_path):
+            if file_name == _KEBECHET_CONFIG_FILE_NAME:
+                _LOGGER.warning(f"There is already a file called {_KEBECHET_CONFIG_FILE_NAME}")
+
+        os.environ[_GIT_TOKEN_VARIABLE] = token
+        print(f"_GIT_TOKEN_VARIABLE={os.environ[_GIT_TOKEN_VARIABLE]}")
+        create_config_file(service_type=service_type, slug=slug)
+
+        if self.has_mr_opened(_GIT_BRANCH_NAME):
+            _LOGGER.warning(
+                f" There is already a new merge Request opened with kebechet YAML file, skipping"
+            )
+            return
+
         with cloned_repo(self.service_url, self.slug, depth=1) as repo:
-            repo.git.checkout('HEAD', b="kebechet-initialization")
+            repo.git.checkout('HEAD', b=_GIT_BRANCH_NAME)
             repo.git.add(A=True)
-            repo.index.commit("creating yaml file")
-            repo.remote().push("kebechet-initialization")
+            repo.index.commit(_GIT_COMMIT_MESSAGE)
+            repo.remote().push(_GIT_BRANCH_NAME)
 
             request = self.sm.open_merge_request(
-                "Initializing Kebechet",
-                "kebechet-initialization",
-                body="Imagine a body here",
-                labels=["enhancement"]
+                _GIT_COMMIT_MESSAGE,
+                _GIT_BRANCH_NAME,
+                body=_GIT_MR_BODY,
+                labels=_GIT_MR_LABELS
             )
 
             _LOGGER.info(
                 f"Opened merge request with {request.number} for kebechet initialization {self.slug} "
             )
 
-
-
-
-
+    def has_mr_opened(self, branch_name) -> bool:
+        for mr in self.sm.repository.merge_requests:
+            if mr.head_branch_name == branch_name and mr.state in ('opened', 'open'):
+                return False
+        return True
