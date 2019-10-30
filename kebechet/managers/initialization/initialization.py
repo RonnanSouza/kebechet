@@ -27,7 +27,7 @@ from kebechet.utils import cloned_repo
 
 _LOGGER = logging.getLogger(__name__)
 
-_KEBECHET_CONFIG_FILE_NAME  = "kebechet.yml"
+_KEBECHET_CONFIG_FILE_NAME = "kebechet.yml"
 _GIT_TOKEN_VARIABLE = "${GIT_SECRET_TOKEN}"
 _GIT_BRANCH_NAME = "kebechet-initialization"
 _GIT_COMMIT_MESSAGE = "Creating kebechet YAML file"
@@ -67,7 +67,6 @@ class InitManager(ManagerBase):
                 _LOGGER.warning(f"There is already a file called {_KEBECHET_CONFIG_FILE_NAME}")
 
         os.environ[_GIT_TOKEN_VARIABLE] = token
-        print(f"_GIT_TOKEN_VARIABLE={os.environ[_GIT_TOKEN_VARIABLE]}")
         create_config_file(service_type=service_type, slug=slug)
 
         if self.has_mr_opened(_GIT_BRANCH_NAME):
@@ -78,7 +77,7 @@ class InitManager(ManagerBase):
 
         with cloned_repo(self.service_url, self.slug, depth=1) as repo:
             repo.git.checkout('HEAD', b=_GIT_BRANCH_NAME)
-            repo.git.add(A=True)
+            repo.index.add('*')
             repo.index.commit(_GIT_COMMIT_MESSAGE)
             repo.remote().push(_GIT_BRANCH_NAME)
 
@@ -95,6 +94,6 @@ class InitManager(ManagerBase):
 
     def has_mr_opened(self, branch_name) -> bool:
         for mr in self.sm.repository.merge_requests:
-            if mr.head_branch_name == branch_name and mr.state in ('opened', 'open'):
-                return False
-        return True
+            if mr.head_branch_name == branch_name:
+                return True
+        return False
