@@ -66,9 +66,6 @@ class InitManager(ManagerBase):
             if file_name == _KEBECHET_CONFIG_FILE_NAME:
                 _LOGGER.warning(f"There is already a file called {_KEBECHET_CONFIG_FILE_NAME}")
 
-        os.environ[_GIT_TOKEN_VARIABLE] = token
-        create_config_file(service_type=service_type, slug=slug)
-
         if self.has_mr_opened(_GIT_BRANCH_NAME):
             _LOGGER.warning(
                 f" There is already a new merge Request opened with kebechet YAML file, skipping"
@@ -76,10 +73,15 @@ class InitManager(ManagerBase):
             return
 
         with cloned_repo(self.service_url, self.slug, depth=1) as repo:
-            repo.git.checkout('HEAD', b=_GIT_BRANCH_NAME)
-            repo.index.add('*')
+
+            os.environ[_GIT_TOKEN_VARIABLE] = token
+            create_config_file(service_type=service_type, slug=slug)
+
+            repo.git.checkout("-B", _GIT_BRANCH_NAME)
+
+            repo.index.add([_KEBECHET_CONFIG_FILE_NAME])
             repo.index.commit(_GIT_COMMIT_MESSAGE)
-            repo.remote().push(_GIT_BRANCH_NAME)
+            repo.remote().push(_GIT_BRANCH_NAME, force=True)
 
             request = self.sm.open_merge_request(
                 _GIT_COMMIT_MESSAGE,
