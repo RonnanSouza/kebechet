@@ -1,0 +1,4 @@
+repositories:
+- slug: RonnanSouza/kebechet
+  token: '{KEBECHET_TOKEN}'
+  service_type: github
